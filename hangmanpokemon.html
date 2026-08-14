@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Hangman — Pokémon 1025</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --surface:#ffffff;
+    --text:#1f2329;
+    --muted:#737b86;
+    --line:#dfe3e8;
+    --accent:#2f6fed;
+    --accent-soft:#edf3ff;
+    --danger:#b84141;
+    --success:#2d7d46;
+    --app-height:100svh;
+    --shadow:0 0.375rem 1.375rem rgba(25,32,45,.08);
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+
+  body{
+    margin:0;
+    width:100%;
+    height:var(--app-height);
+    overflow:hidden;
+    font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+
+  button,input{font:inherit}
+
+  .app{
+    width:100%;
+    height:var(--app-height);
+    min-height:var(--app-height);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    margin:0;
+    padding:0;
+  }
+
+  .game-card{
+    flex:1;
+    width:100%;
+    height:var(--app-height);
+    min-height:0;
+    background:var(--surface);
+    padding:clamp(0.6rem,1.6svh,1.2rem) clamp(0.7rem,2.8vw,1.6rem);
+    display:grid;
+    grid-template-rows:
+      auto
+      minmax(0, 33svh)
+      minmax(0, 18svh)
+      auto
+      auto
+      auto;
+    gap:clamp(0.35rem,1.2svh,0.85rem);
+    overflow:hidden;
+  }
+
+  .fullscreen-btn{
+    display:grid;
+    place-items:center;
+    width:clamp(2.25rem,6svh,2.8rem);
+    aspect-ratio:1;
+    padding:0;
+    border:0;
+    border-radius:0.75rem;
+    background:#f2f4f7;
+    color:var(--text);
+    font-size:clamp(1.15rem,4vw,1.45rem);
+    line-height:1;
+    cursor:pointer;
+    transition:transform .08s ease, background .18s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  .fullscreen-btn:active{
+    transform:scale(.97);
+  }
+
+  .status-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:0.75rem;
+    color:var(--muted);
+    font-size:.9rem;
+    min-height:1.5rem;
+  }
+
+
+
+  .tries-text{
+    font-size:clamp(0.95rem,3.6vw,1.2rem);
+    font-weight:600;
+    transition:color .18s ease;
+  }
+
+  .tries-text.warning{
+    color:var(--danger);
+    font-weight:750;
+  }
+
+  .hangman-wrap{
+    min-height:0;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+  }
+
+  .hangman{
+    width:min(48vw,30svh);
+    max-height:100%;
+    height:auto;
+    overflow:visible;
+  }
+
+  .hangman line,
+  .hangman circle,
+  .hangman path{
+    stroke:var(--text);
+    stroke-width:0.42rem;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    fill:none;
+    vector-effect:non-scaling-stroke;
+  }
+
+  .stage{
+    opacity:0;
+    transition:opacity .24s ease;
+  }
+
+  .stage.show{opacity:1}
+
+  .word-zone{
+    min-height:0;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+  }
+
+  .slots{
+    width:100%;
+    max-height:100%;
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    align-items:flex-end;
+    align-content:center;
+    gap:clamp(0.3rem,1svh,0.6rem) clamp(0.28rem,1.2vw,0.5rem);
+    overflow:hidden;
+  }
+
+  .letter-slot{
+    width:clamp(1.55rem,5.5vw,2.4rem);
+    height:clamp(2.2rem,7svh,3.1rem);
+    border-bottom:0.1875rem solid var(--text);
+    display:flex;
+    justify-content:center;
+    align-items:flex-end;
+    padding-bottom:0.25rem;
+    font-size:clamp(1.15rem,4.8vw,2rem);
+    font-weight:700;
+    line-height:1;
+    text-transform:uppercase;
+  }
+
+
+  .slots.win .letter-slot{
+    color:var(--success);
+    border-bottom-color:var(--success);
+  }
+
+  .slots.loss .letter-slot{
+    color:var(--danger);
+    border-bottom-color:var(--danger);
+  }
+
+  .letter-slot.correct-hit{
+    color:var(--success);
+    border-bottom-color:var(--success);
+    animation:correctPulse .32s ease;
+  }
+
+  .game-card.wrong-flash{
+    animation:wrongFlash .28s ease;
+  }
+
+  @keyframes correctPulse{
+    0%{transform:scale(1)}
+    50%{transform:scale(1.045)}
+    100%{transform:scale(1)}
+  }
+
+  @keyframes wrongFlash{
+    0%{background:var(--surface)}
+    50%{background:#fff5f5}
+    100%{background:var(--surface)}
+  }
+
+  .space-slot{
+    width:clamp(0.7rem,3vw,1.25rem);
+    height:clamp(2.2rem,7svh,3.1rem);
+  }
+
+  .punct{
+    width:auto;
+    min-width:0.5rem;
+    height:clamp(2.2rem,7svh,3.1rem);
+    display:flex;
+    align-items:flex-end;
+    padding-bottom:0.25rem;
+    font-size:clamp(1.1rem,4.5vw,1.9rem);
+    font-weight:700;
+  }
+
+  .misses{
+    min-height:0;
+    text-align:center;
+  }
+
+  .misses-label{
+    color:var(--muted);
+    font-size:.8rem;
+    text-transform:uppercase;
+    letter-spacing:.09em;
+    margin-bottom:0.5625rem;
+  }
+
+  .misses-list{
+    min-height:1.625rem;
+    font-size:1.05rem;
+    font-weight:650;
+    letter-spacing:.16em;
+  }
+
+  .solve-panel{
+    min-height:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .solve-form{
+    width:min(32.5rem,100%);
+    display:none;
+    gap:0.625rem;
+    align-items:center;
+  }
+
+  .solve-form.open{display:grid; grid-template-columns:1fr auto auto}
+
+  .solve-input{
+    width:100%;
+    border:0.0625rem solid var(--line);
+    border-radius:0.8125rem;
+    padding:0.8125rem 0.875rem;
+    outline:none;
+    background:#fff;
+  }
+
+  .solve-input:focus{
+    border-color:var(--accent);
+    box-shadow:0 0 0 0.1875rem var(--accent-soft);
+  }
+
+  .controls{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:0.625rem;
+  }
+
+  .btn{
+    border:none;
+    border-radius:0.8125rem;
+    min-height:clamp(2.5rem,6svh,2.875rem);
+    padding:0 clamp(0.8rem,3vw,1.125rem);
+    cursor:pointer;
+    font-weight:700;
+    transition:transform .08s ease, background .18s ease, box-shadow .18s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  .btn:active{transform:scale(.985)}
+
+  .btn-primary{
+    background:var(--accent);
+    color:#fff;
+    box-shadow:0 0.25rem 0.75rem rgba(47,111,237,.24);
+  }
+
+  .btn-secondary{
+    background:var(--accent-soft);
+    color:var(--accent);
+  }
+
+  .btn-ghost{
+    background:#f2f4f7;
+    color:var(--text);
+  }
+
+  .btn-danger{
+    background:#fff1f1;
+    color:var(--danger);
+  }
+
+  .message{
+    min-height:1.5rem;
+    text-align:center;
+    font-size:.95rem;
+    color:var(--muted);
+  }
+
+  .message.success{color:var(--success); font-weight:700}
+  .message.danger{color:var(--danger); font-weight:700}
+
+  .hidden-input{
+    position:fixed;
+    left:-625rem;
+    top:-625rem;
+    opacity:0;
+  }
+
+  @media (orientation:portrait){
+    .game-card{
+      padding:
+        clamp(0.45rem,1.2svh,0.8rem)
+        clamp(0.65rem,2.7vw,1rem);
+      grid-template-rows:
+        auto
+        minmax(0, 32svh)
+        minmax(0, 19svh)
+        auto
+        auto
+        auto;
+      gap:clamp(0.28rem,0.9svh,0.65rem);
+    }
+
+    .hangman{
+      width:min(54vw, 29svh);
+    }
+
+    .fullscreen-btn{
+    display:grid;
+    place-items:center;
+    width:clamp(2.25rem,6svh,2.8rem);
+    aspect-ratio:1;
+    padding:0;
+    border:0;
+    border-radius:0.75rem;
+    background:#f2f4f7;
+    color:var(--text);
+    font-size:clamp(1.15rem,4vw,1.45rem);
+    line-height:1;
+    cursor:pointer;
+    transition:transform .08s ease, background .18s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  .fullscreen-btn:active{
+    transform:scale(.97);
+  }
+
+  .status-row{
+      min-height:0;
+      font-size:clamp(0.72rem,2.8vw,0.9rem);
+    }
+
+    .misses-label{
+      margin-bottom:clamp(0.2rem,0.7svh,0.45rem);
+    }
+
+    .misses-list{
+      min-height:0;
+      font-size:clamp(0.9rem,3.7vw,1.05rem);
+    }
+
+    .message{
+      min-height:0;
+      font-size:clamp(0.78rem,3vw,0.95rem);
+    }
+
+    .controls{
+      gap:clamp(0.4rem,1.5vw,0.625rem);
+    }
+
+    .solve-form.open{
+      grid-template-columns:1fr 1fr;
+    }
+
+    .solve-input{
+      grid-column:1 / -1;
+      padding:clamp(0.65rem,1.7svh,0.8125rem) clamp(0.75rem,3vw,0.875rem);
+    }
+
+    .solve-form .btn{
+      width:100%;
+    }
+  }
+
+  @media (orientation:portrait) and (max-height:36em){
+    .game-card{
+      grid-template-rows:
+        auto
+        minmax(0, 29svh)
+        minmax(0, 17svh)
+        auto
+        auto
+        auto;
+      gap:0.3rem;
+    }
+
+    .hangman{
+      width:min(48vw, 25svh);
+    }
+
+    .letter-slot{
+      height:clamp(1.9rem,6svh,2.5rem);
+      font-size:clamp(1rem,4.3vw,1.6rem);
+    }
+
+    .space-slot,
+    .punct{
+      height:clamp(1.9rem,6svh,2.5rem);
+    }
+  }
+
+
+  /* Software keyboard mode.
+     Use a vertical flex flow instead of grid rows so sections can never overlap. */
+  body.keyboard-open .game-card{
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-start;
+    height:var(--app-height);
+    min-height:0;
+    gap:clamp(0.18rem,0.65svh,0.42rem);
+    padding:
+      clamp(0.28rem,0.75svh,0.55rem)
+      clamp(0.65rem,2.7vw,1rem)
+      clamp(0.22rem,0.65svh,0.48rem);
+    overflow:hidden;
+  }
+
+  body.keyboard-open .status-row{
+    flex:0 0 auto;
+    min-height:0;
+  }
+
+  body.keyboard-open .hangman-wrap{
+    flex:1 1 auto;
+    min-height:clamp(6.2rem,18svh,9.2rem);
+    max-height:clamp(8rem,25svh,12rem);
+    display:grid;
+    place-items:center;
+    overflow:visible;
+  }
+
+  body.keyboard-open .hangman{
+    height:100%;
+    width:auto;
+    max-width:52vw;
+    max-height:100%;
+    overflow:visible;
+    display:block;
+  }
+
+  body.keyboard-open .word-zone{
+    flex:0 0 auto;
+    min-height:clamp(3.2rem,10svh,4.8rem);
+    overflow:visible;
+  }
+
+  body.keyboard-open .slots{
+    max-height:none;
+  }
+
+  body.keyboard-open .letter-slot{
+    width:clamp(1.35rem,5vw,2.1rem);
+    height:clamp(1.9rem,5.8svh,2.6rem);
+    font-size:clamp(1rem,4.2vw,1.7rem);
+  }
+
+  body.keyboard-open .space-slot,
+  body.keyboard-open .punct{
+    height:clamp(1.9rem,5.8svh,2.6rem);
+  }
+
+  body.keyboard-open .feedback-zone{
+    flex:0 0 auto;
+  }
+
+  body.keyboard-open .misses-label{
+    margin-bottom:clamp(0.1rem,0.35svh,0.25rem);
+  }
+
+  body.keyboard-open .message{
+    display:none;
+  }
+
+  /* Normal letter-guess keyboard mode. */
+  body.keyboard-open:not(.solve-mode-layout) .solve-panel,
+  body.keyboard-open:not(.solve-mode-layout) .controls{
+    display:none;
+  }
+
+  /* Solve mode remains explicit and survives Android focus/resize quirks. */
+  body.solve-mode-layout .controls{
+    display:none;
+  }
+
+  body.solve-mode-layout .solve-panel{
+    display:flex;
+  }
+
+  body.keyboard-open.solve-mode-layout .hangman-wrap{
+    min-height:clamp(5.4rem,15svh,7.8rem);
+    max-height:clamp(6.8rem,20svh,9.2rem);
+  }
+
+  body.keyboard-open.solve-mode-layout .hangman{
+    height:100%;
+    width:auto;
+    max-width:46vw;
+    max-height:100%;
+    overflow:visible;
+  }
+
+  body.keyboard-open.solve-mode-layout .word-zone{
+    min-height:clamp(2.8rem,8svh,4rem);
+  }
+
+  body.keyboard-open.solve-mode-layout .feedback-zone{
+    flex:0 0 auto;
+  }
+
+  body.keyboard-open.solve-mode-layout .solve-panel{
+    flex:0 0 auto;
+    min-height:0;
+    width:100%;
+  }
+
+  body.keyboard-open.solve-mode-layout .solve-form.open{
+    width:min(94vw,32.5rem);
+  }
+
+
+
+  /* Compact Solve Word controls only. Keep normal letter-entry layout unchanged. */
+  body.keyboard-open.solve-mode-layout .solve-panel{
+    flex:0 0 auto;
+    width:100%;
+    padding-bottom:max(env(safe-area-inset-bottom),0.2rem);
+  }
+
+  body.keyboard-open.solve-mode-layout .solve-form.open{
+    width:min(94vw,32.5rem);
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:clamp(0.28rem,0.7svh,0.45rem);
+    align-items:center;
+  }
+
+  body.keyboard-open.solve-mode-layout .solve-input{
+    grid-column:1 / -1;
+    min-height:clamp(2.45rem,5.4svh,2.8rem);
+    padding:
+      clamp(0.42rem,1.05svh,0.62rem)
+      clamp(0.7rem,2.6vw,0.9rem);
+  }
+
+  body.keyboard-open.solve-mode-layout .solve-form .btn{
+    width:100%;
+    min-height:clamp(2.3rem,5svh,2.65rem);
+    padding:0 clamp(0.65rem,2.4vw,0.9rem);
+  }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="game-card" id="gameCard">
+    <div class="status-row">
+      <button class="fullscreen-btn" id="fullscreenBtn" type="button" aria-label="Toggle fullscreen" title="Fullscreen">⛶</button>
+      <span class="tries-text" id="triesText">0 / 6 misses</span>
+    </div>
+
+    <div class="hangman-wrap">
+      <svg class="hangman" viewBox="0 0 300 225" preserveAspectRatio="xMidYMid meet" aria-label="Hangman drawing">
+        <!-- gallows visible from the start -->
+        <line x1="55" y1="205" x2="245" y2="205"/>
+        <line x1="95" y1="205" x2="95" y2="28"/>
+        <line x1="95" y1="28" x2="210" y2="28"/>
+        <line x1="210" y1="28" x2="210" y2="55"/>
+
+        <!-- six mistakes:
+             1 head, 2 torso, 3 left arm, 4 right arm, 5 left leg, 6 right leg -->
+        <circle class="stage" id="s1" cx="210" cy="77" r="22"/>
+        <line class="stage" id="s2" x1="210" y1="99" x2="210" y2="151"/>
+        <line class="stage" id="s3" x1="210" y1="115" x2="177" y2="138"/>
+        <line class="stage" id="s4" x1="210" y1="115" x2="243" y2="138"/>
+        <line class="stage" id="s5" x1="210" y1="151" x2="184" y2="190"/>
+        <line class="stage" id="s6" x1="210" y1="151" x2="236" y2="190"/>
+      </svg>
+    </div>
+
+    <section class="word-zone" id="wordZone" title="Tap here to type a letter">
+      <div class="slots" id="slots"></div>
+    </section>
+
+    <div class="feedback-zone">
+      <div class="misses">
+        <div class="misses-label">Misses</div>
+        <div class="misses-list" id="missesList">—</div>
+      </div>
+      <div class="message" id="message"></div>
+    </div>
+
+    <div class="solve-panel">
+      <div class="solve-form" id="solveForm">
+        <input class="solve-input" id="solveInput" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Type the full answer..." />
+        <button class="btn btn-ghost" id="cancelSolve">Cancel</button>
+        <button class="btn btn-primary" id="submitSolve">Solve</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="controls">
+        <button class="btn btn-secondary" id="solveBtn">Solve Word</button>
+        <button class="btn btn-primary" id="newWordBtn">New Word</button>
+      </div>
+      
+    </div>
+  </main>
+</div>
+
+<input class="hidden-input" id="letterInput" inputmode="text" maxlength="1" autocomplete="off" autocapitalize="characters" />
+
+<script>
+(() => {
+  // Pokémon branch: National Pokédex #0001–#1025, internal game data only.
+  const words = new TextDecoder().decode(
+    Uint8Array.from(atob("QnVsYmFzYXVyCkl2eXNhdXIKVmVudXNhdXIKQ2hhcm1hbmRlcgpDaGFybWVsZW9uCkNoYXJpemFyZApTcXVpcnRsZQpXYXJ0b3J0bGUKQmxhc3RvaXNlCkNhdGVycGllCk1ldGFwb2QKQnV0dGVyZnJlZQpXZWVkbGUKS2FrdW5hCkJlZWRyaWxsClBpZGdleQpQaWRnZW90dG8KUGlkZ2VvdApSYXR0YXRhClJhdGljYXRlClNwZWFyb3cKRmVhcm93CkVrYW5zCkFyYm9rClBpa2FjaHUKUmFpY2h1ClNhbmRzaHJldwpTYW5kc2xhc2gKTmlkb3JhbuKZgApOaWRvcmluYQpOaWRvcXVlZW4KTmlkb3JhbuKZggpOaWRvcmlubwpOaWRva2luZwpDbGVmYWlyeQpDbGVmYWJsZQpWdWxwaXgKTmluZXRhbGVzCkppZ2dseXB1ZmYKV2lnZ2x5dHVmZgpadWJhdApHb2xiYXQKT2RkaXNoCkdsb29tClZpbGVwbHVtZQpQYXJhcwpQYXJhc2VjdApWZW5vbmF0ClZlbm9tb3RoCkRpZ2xldHQKRHVndHJpbwpNZW93dGgKUGVyc2lhbgpQc3lkdWNrCkdvbGR1Y2sKTWFua2V5ClByaW1lYXBlCkdyb3dsaXRoZQpBcmNhbmluZQpQb2xpd2FnClBvbGl3aGlybApQb2xpd3JhdGgKQWJyYQpLYWRhYnJhCkFsYWthemFtCk1hY2hvcApNYWNob2tlCk1hY2hhbXAKQmVsbHNwcm91dApXZWVwaW5iZWxsClZpY3RyZWViZWwKVGVudGFjb29sClRlbnRhY3J1ZWwKR2VvZHVkZQpHcmF2ZWxlcgpHb2xlbQpQb255dGEKUmFwaWRhc2gKU2xvd3Bva2UKU2xvd2JybwpNYWduZW1pdGUKTWFnbmV0b24KRmFyZmV0Y2gnZApEb2R1bwpEb2RyaW8KU2VlbApEZXdnb25nCkdyaW1lcgpNdWsKU2hlbGxkZXIKQ2xveXN0ZXIKR2FzdGx5CkhhdW50ZXIKR2VuZ2FyCk9uaXgKRHJvd3plZQpIeXBubwpLcmFiYnkKS2luZ2xlcgpWb2x0b3JiCkVsZWN0cm9kZQpFeGVnZ2N1dGUKRXhlZ2d1dG9yCkN1Ym9uZQpNYXJvd2FrCkhpdG1vbmxlZQpIaXRtb25jaGFuCkxpY2tpdHVuZwpLb2ZmaW5nCldlZXppbmcKUmh5aG9ybgpSaHlkb24KQ2hhbnNleQpUYW5nZWxhCkthbmdhc2toYW4KSG9yc2VhClNlYWRyYQpHb2xkZWVuClNlYWtpbmcKU3Rhcnl1ClN0YXJtaWUKTXIuIE1pbWUKU2N5dGhlcgpKeW54CkVsZWN0YWJ1enoKTWFnbWFyClBpbnNpcgpUYXVyb3MKTWFnaWthcnAKR3lhcmFkb3MKTGFwcmFzCkRpdHRvCkVldmVlClZhcG9yZW9uCkpvbHRlb24KRmxhcmVvbgpQb3J5Z29uCk9tYW55dGUKT21hc3RhcgpLYWJ1dG8KS2FidXRvcHMKQWVyb2RhY3R5bApTbm9ybGF4CkFydGljdW5vClphcGRvcwpNb2x0cmVzCkRyYXRpbmkKRHJhZ29uYWlyCkRyYWdvbml0ZQpNZXd0d28KTWV3CkNoaWtvcml0YQpCYXlsZWVmCk1lZ2FuaXVtCkN5bmRhcXVpbApRdWlsYXZhClR5cGhsb3Npb24KVG90b2RpbGUKQ3JvY29uYXcKRmVyYWxpZ2F0cgpTZW50cmV0CkZ1cnJldApIb290aG9vdApOb2N0b3dsCkxlZHliYQpMZWRpYW4KU3BpbmFyYWsKQXJpYWRvcwpDcm9iYXQKQ2hpbmNob3UKTGFudHVybgpQaWNodQpDbGVmZmEKSWdnbHlidWZmClRvZ2VwaQpUb2dldGljCk5hdHUKWGF0dQpNYXJlZXAKRmxhYWZmeQpBbXBoYXJvcwpCZWxsb3Nzb20KTWFyaWxsCkF6dW1hcmlsbApTdWRvd29vZG8KUG9saXRvZWQKSG9wcGlwClNraXBsb29tCkp1bXBsdWZmCkFpcG9tClN1bmtlcm4KU3VuZmxvcmEKWWFubWEKV29vcGVyClF1YWdzaXJlCkVzcGVvbgpVbWJyZW9uCk11cmtyb3cKU2xvd2tpbmcKTWlzZHJlYXZ1cwpVbm93bgpXb2JidWZmZXQKR2lyYWZhcmlnClBpbmVjbwpGb3JyZXRyZXNzCkR1bnNwYXJjZQpHbGlnYXIKU3RlZWxpeApTbnViYnVsbApHcmFuYnVsbApRd2lsZmlzaApTY2l6b3IKU2h1Y2tsZQpIZXJhY3Jvc3MKU25lYXNlbApUZWRkaXVyc2EKVXJzYXJpbmcKU2x1Z21hCk1hZ2NhcmdvClN3aW51YgpQaWxvc3dpbmUKQ29yc29sYQpSZW1vcmFpZApPY3RpbGxlcnkKRGVsaWJpcmQKTWFudGluZQpTa2FybW9yeQpIb3VuZG91cgpIb3VuZG9vbQpLaW5nZHJhClBoYW5weQpEb25waGFuClBvcnlnb24yClN0YW50bGVyClNtZWFyZ2xlClR5cm9ndWUKSGl0bW9udG9wClNtb29jaHVtCkVsZWtpZApNYWdieQpNaWx0YW5rCkJsaXNzZXkKUmFpa291CkVudGVpClN1aWN1bmUKTGFydml0YXIKUHVwaXRhcgpUeXJhbml0YXIKTHVnaWEKSG8tT2gKQ2VsZWJpClRyZWVja28KR3JvdnlsZQpTY2VwdGlsZQpUb3JjaGljCkNvbWJ1c2tlbgpCbGF6aWtlbgpNdWRraXAKTWFyc2h0b21wClN3YW1wZXJ0ClBvb2NoeWVuYQpNaWdodHllbmEKWmlnemFnb29uCkxpbm9vbmUKV3VybXBsZQpTaWxjb29uCkJlYXV0aWZseQpDYXNjb29uCkR1c3RveApMb3RhZApMb21icmUKTHVkaWNvbG8KU2VlZG90Ck51emxlYWYKU2hpZnRyeQpUYWlsbG93ClN3ZWxsb3cKV2luZ3VsbApQZWxpcHBlcgpSYWx0cwpLaXJsaWEKR2FyZGV2b2lyClN1cnNraXQKTWFzcXVlcmFpbgpTaHJvb21pc2gKQnJlbG9vbQpTbGFrb3RoClZpZ29yb3RoClNsYWtpbmcKTmluY2FkYQpOaW5qYXNrClNoZWRpbmphCldoaXNtdXIKTG91ZHJlZApFeHBsb3VkCk1ha3VoaXRhCkhhcml5YW1hCkF6dXJpbGwKTm9zZXBhc3MKU2tpdHR5CkRlbGNhdHR5ClNhYmxleWUKTWF3aWxlCkFyb24KTGFpcm9uCkFnZ3JvbgpNZWRpdGl0ZQpNZWRpY2hhbQpFbGVjdHJpa2UKTWFuZWN0cmljClBsdXNsZQpNaW51bgpWb2xiZWF0CklsbHVtaXNlClJvc2VsaWEKR3VscGluClN3YWxvdApDYXJ2YW5oYQpTaGFycGVkbwpXYWlsbWVyCldhaWxvcmQKTnVtZWwKQ2FtZXJ1cHQKVG9ya29hbApTcG9pbmsKR3J1bXBpZwpTcGluZGEKVHJhcGluY2gKVmlicmF2YQpGbHlnb24KQ2FjbmVhCkNhY3R1cm5lClN3YWJsdQpBbHRhcmlhClphbmdvb3NlClNldmlwZXIKTHVuYXRvbmUKU29scm9jawpCYXJib2FjaApXaGlzY2FzaApDb3JwaGlzaApDcmF3ZGF1bnQKQmFsdG95CkNsYXlkb2wKTGlsZWVwCkNyYWRpbHkKQW5vcml0aApBcm1hbGRvCkZlZWJhcwpNaWxvdGljCkNhc3Rmb3JtCktlY2xlb24KU2h1cHBldApCYW5ldHRlCkR1c2t1bGwKRHVzY2xvcHMKVHJvcGl1cwpDaGltZWNobwpBYnNvbApXeW5hdXQKU25vcnVudApHbGFsaWUKU3BoZWFsClNlYWxlbwpXYWxyZWluCkNsYW1wZXJsCkh1bnRhaWwKR29yZWJ5c3MKUmVsaWNhbnRoCkx1dmRpc2MKQmFnb24KU2hlbGdvbgpTYWxhbWVuY2UKQmVsZHVtCk1ldGFuZwpNZXRhZ3Jvc3MKUmVnaXJvY2sKUmVnaWNlClJlZ2lzdGVlbApMYXRpYXMKTGF0aW9zCkt5b2dyZQpHcm91ZG9uClJheXF1YXphCkppcmFjaGkKRGVveHlzClR1cnR3aWcKR3JvdGxlClRvcnRlcnJhCkNoaW1jaGFyCk1vbmZlcm5vCkluZmVybmFwZQpQaXBsdXAKUHJpbnBsdXAKRW1wb2xlb24KU3Rhcmx5ClN0YXJhdmlhClN0YXJhcHRvcgpCaWRvb2YKQmliYXJlbApLcmlja2V0b3QKS3JpY2tldHVuZQpTaGlueApMdXhpbwpMdXhyYXkKQnVkZXcKUm9zZXJhZGUKQ3Jhbmlkb3MKUmFtcGFyZG9zClNoaWVsZG9uCkJhc3Rpb2RvbgpCdXJteQpXb3JtYWRhbQpNb3RoaW0KQ29tYmVlClZlc3BpcXVlbgpQYWNoaXJpc3UKQnVpemVsCkZsb2F0emVsCkNoZXJ1YmkKQ2hlcnJpbQpTaGVsbG9zCkdhc3Ryb2RvbgpBbWJpcG9tCkRyaWZsb29uCkRyaWZibGltCkJ1bmVhcnkKTG9wdW5ueQpNaXNtYWdpdXMKSG9uY2hrcm93CkdsYW1lb3cKUHVydWdseQpDaGluZ2xpbmcKU3R1bmt5ClNrdW50YW5rCkJyb256b3IKQnJvbnpvbmcKQm9uc2x5Ck1pbWUgSnIuCkhhcHBpbnkKQ2hhdG90ClNwaXJpdG9tYgpHaWJsZQpHYWJpdGUKR2FyY2hvbXAKTXVuY2hsYXgKUmlvbHUKTHVjYXJpbwpIaXBwb3BvdGFzCkhpcHBvd2RvbgpTa29ydXBpCkRyYXBpb24KQ3JvYWd1bmsKVG94aWNyb2FrCkNhcm5pdmluZQpGaW5uZW9uCkx1bWluZW9uCk1hbnR5a2UKU25vdmVyCkFib21hc25vdwpXZWF2aWxlCk1hZ25lem9uZQpMaWNraWxpY2t5ClJoeXBlcmlvcgpUYW5ncm93dGgKRWxlY3RpdmlyZQpNYWdtb3J0YXIKVG9nZWtpc3MKWWFubWVnYQpMZWFmZW9uCkdsYWNlb24KR2xpc2NvcgpNYW1vc3dpbmUKUG9yeWdvbi1aCkdhbGxhZGUKUHJvYm9wYXNzCkR1c2tub2lyCkZyb3NsYXNzClJvdG9tClV4aWUKTWVzcHJpdApBemVsZgpEaWFsZ2EKUGFsa2lhCkhlYXRyYW4KUmVnaWdpZ2FzCkdpcmF0aW5hCkNyZXNzZWxpYQpQaGlvbmUKTWFuYXBoeQpEYXJrcmFpClNoYXltaW4KQXJjZXVzClZpY3RpbmkKU25pdnkKU2VydmluZQpTZXJwZXJpb3IKVGVwaWcKUGlnbml0ZQpFbWJvYXIKT3NoYXdvdHQKRGV3b3R0ClNhbXVyb3R0ClBhdHJhdApXYXRjaG9nCkxpbGxpcHVwCkhlcmRpZXIKU3RvdXRsYW5kClB1cnJsb2luCkxpZXBhcmQKUGFuc2FnZQpTaW1pc2FnZQpQYW5zZWFyClNpbWlzZWFyClBhbnBvdXIKU2ltaXBvdXIKTXVubmEKTXVzaGFybmEKUGlkb3ZlClRyYW5xdWlsbApVbmZlemFudApCbGl0emxlClplYnN0cmlrYQpSb2dnZW5yb2xhCkJvbGRvcmUKR2lnYWxpdGgKV29vYmF0ClN3b29iYXQKRHJpbGJ1cgpFeGNhZHJpbGwKQXVkaW5vClRpbWJ1cnIKR3VyZHVycgpDb25rZWxkdXJyClR5bXBvbGUKUGFscGl0b2FkClNlaXNtaXRvYWQKVGhyb2gKU2F3awpTZXdhZGRsZQpTd2FkbG9vbgpMZWF2YW5ueQpWZW5pcGVkZQpXaGlybGlwZWRlClNjb2xpcGVkZQpDb3R0b25lZQpXaGltc2ljb3R0ClBldGlsaWwKTGlsbGlnYW50CkJhc2N1bGluClNhbmRpbGUKS3Jva29yb2sKS3Jvb2tvZGlsZQpEYXJ1bWFrYQpEYXJtYW5pdGFuCk1hcmFjdHVzCkR3ZWJibGUKQ3J1c3RsZQpTY3JhZ2d5ClNjcmFmdHkKU2lnaWx5cGgKWWFtYXNrCkNvZmFncmlndXMKVGlydG91Z2EKQ2FycmFjb3N0YQpBcmNoZW4KQXJjaGVvcHMKVHJ1YmJpc2gKR2FyYm9kb3IKWm9ydWEKWm9yb2FyawpNaW5jY2lubwpDaW5jY2lubwpHb3RoaXRhCkdvdGhvcml0YQpHb3RoaXRlbGxlClNvbG9zaXMKRHVvc2lvbgpSZXVuaWNsdXMKRHVja2xldHQKU3dhbm5hClZhbmlsbGl0ZQpWYW5pbGxpc2gKVmFuaWxsdXhlCkRlZXJsaW5nClNhd3NidWNrCkVtb2xnYQpLYXJyYWJsYXN0CkVzY2F2YWxpZXIKRm9vbmd1cwpBbW9vbmd1c3MKRnJpbGxpc2gKSmVsbGljZW50CkFsb21vbW9sYQpKb2x0aWsKR2FsdmFudHVsYQpGZXJyb3NlZWQKRmVycm90aG9ybgpLbGluawpLbGFuZwpLbGlua2xhbmcKVHluYW1vCkVlbGVrdHJpawpFZWxla3Ryb3NzCkVsZ3llbQpCZWhlZXllbQpMaXR3aWNrCkxhbXBlbnQKQ2hhbmRlbHVyZQpBeGV3CkZyYXh1cmUKSGF4b3J1cwpDdWJjaG9vCkJlYXJ0aWMKQ3J5b2dvbmFsClNoZWxtZXQKQWNjZWxnb3IKU3R1bmZpc2sKTWllbmZvbwpNaWVuc2hhbwpEcnVkZGlnb24KR29sZXR0CkdvbHVyawpQYXduaWFyZApCaXNoYXJwCkJvdWZmYWxhbnQKUnVmZmxldApCcmF2aWFyeQpWdWxsYWJ5Ck1hbmRpYnV6egpIZWF0bW9yCkR1cmFudApEZWlubwpad2VpbG91cwpIeWRyZWlnb24KTGFydmVzdGEKVm9sY2Fyb25hCkNvYmFsaW9uClRlcnJha2lvbgpWaXJpemlvbgpUb3JuYWR1cwpUaHVuZHVydXMKUmVzaGlyYW0KWmVrcm9tCkxhbmRvcnVzCkt5dXJlbQpLZWxkZW8KTWVsb2V0dGEKR2VuZXNlY3QKQ2hlc3BpbgpRdWlsbGFkaW4KQ2hlc25hdWdodApGZW5uZWtpbgpCcmFpeGVuCkRlbHBob3gKRnJvYWtpZQpGcm9nYWRpZXIKR3JlbmluamEKQnVubmVsYnkKRGlnZ2Vyc2J5CkZsZXRjaGxpbmcKRmxldGNoaW5kZXIKVGFsb25mbGFtZQpTY2F0dGVyYnVnClNwZXdwYQpWaXZpbGxvbgpMaXRsZW8KUHlyb2FyCkZsYWLDqWLDqQpGbG9ldHRlCkZsb3JnZXMKU2tpZGRvCkdvZ29hdApQYW5jaGFtClBhbmdvcm8KRnVyZnJvdQpFc3B1cnIKTWVvd3N0aWMKSG9uZWRnZQpEb3VibGFkZQpBZWdpc2xhc2gKU3ByaXR6ZWUKQXJvbWF0aXNzZQpTd2lybGl4ClNsdXJwdWZmCklua2F5Ck1hbGFtYXIKQmluYWNsZQpCYXJiYXJhY2xlClNrcmVscApEcmFnYWxnZQpDbGF1bmNoZXIKQ2xhd2l0emVyCkhlbGlvcHRpbGUKSGVsaW9saXNrClR5cnVudApUeXJhbnRydW0KQW1hdXJhCkF1cm9ydXMKU3lsdmVvbgpIYXdsdWNoYQpEZWRlbm5lCkNhcmJpbmsKR29vbXkKU2xpZ2dvbwpHb29kcmEKS2xlZmtpClBoYW50dW1wClRyZXZlbmFudApQdW1wa2Fib28KR291cmdlaXN0CkJlcmdtaXRlCkF2YWx1Z2cKTm9pYmF0Ck5vaXZlcm4KWGVybmVhcwpZdmVsdGFsClp5Z2FyZGUKRGlhbmNpZQpIb29wYQpWb2xjYW5pb24KUm93bGV0CkRhcnRyaXgKRGVjaWR1ZXllCkxpdHRlbgpUb3JyYWNhdApJbmNpbmVyb2FyClBvcHBsaW8KQnJpb25uZQpQcmltYXJpbmEKUGlraXBlawpUcnVtYmVhawpUb3VjYW5ub24KWXVuZ29vcwpHdW1zaG9vcwpHcnViYmluCkNoYXJqYWJ1ZwpWaWthdm9sdApDcmFicmF3bGVyCkNyYWJvbWluYWJsZQpPcmljb3JpbwpDdXRpZWZseQpSaWJvbWJlZQpSb2NrcnVmZgpMeWNhbnJvYwpXaXNoaXdhc2hpCk1hcmVhbmllClRveGFwZXgKTXVkYnJheQpNdWRzZGFsZQpEZXdwaWRlcgpBcmFxdWFuaWQKRm9tYW50aXMKTHVyYW50aXMKTW9yZWx1bGwKU2hpaW5vdGljClNhbGFuZGl0ClNhbGF6emxlClN0dWZmdWwKQmV3ZWFyCkJvdW5zd2VldApTdGVlbmVlClRzYXJlZW5hCkNvbWZleQpPcmFuZ3VydQpQYXNzaW1pYW4KV2ltcG9kCkdvbGlzb3BvZApTYW5keWdhc3QKUGFsb3NzYW5kClB5dWt1bXVrdQpUeXBlOiBOdWxsClNpbHZhbGx5Ck1pbmlvcgpLb21hbGEKVHVydG9uYXRvcgpUb2dlZGVtYXJ1Ck1pbWlreXUKQnJ1eGlzaApEcmFtcGEKRGhlbG1pc2UKSmFuZ21vLW8KSGFrYW1vLW8KS29tbW8tbwpUYXB1IEtva28KVGFwdSBMZWxlClRhcHUgQnVsdQpUYXB1IEZpbmkKQ29zbW9nCkNvc21vZW0KU29sZ2FsZW8KTHVuYWxhCk5paGlsZWdvCkJ1enp3b2xlClBoZXJvbW9zYQpYdXJraXRyZWUKQ2VsZXN0ZWVsYQpLYXJ0YW5hCkd1enpsb3JkCk5lY3Jvem1hCk1hZ2Vhcm5hCk1hcnNoYWRvdwpQb2lwb2xlCk5hZ2FuYWRlbApTdGFrYXRha2EKQmxhY2VwaGFsb24KWmVyYW9yYQpNZWx0YW4KTWVsbWV0YWwKR3Jvb2tleQpUaHdhY2tleQpSaWxsYWJvb20KU2NvcmJ1bm55ClJhYm9vdApDaW5kZXJhY2UKU29iYmxlCkRyaXp6aWxlCkludGVsZW9uClNrd292ZXQKR3JlZWRlbnQKUm9va2lkZWUKQ29ydmlzcXVpcmUKQ29ydmlrbmlnaHQKQmxpcGJ1ZwpEb3R0bGVyCk9yYmVldGxlCk5pY2tpdApUaGlldnVsCkdvc3NpZmxldXIKRWxkZWdvc3MKV29vbG9vCkR1Yndvb2wKQ2hld3RsZQpEcmVkbmF3CllhbXBlcgpCb2x0dW5kClJvbHljb2x5CkNhcmtvbApDb2Fsb3NzYWwKQXBwbGluCkZsYXBwbGUKQXBwbGV0dW4KU2lsaWNvYnJhClNhbmRhY29uZGEKQ3JhbW9yYW50CkFycm9rdWRhCkJhcnJhc2tld2RhClRveGVsClRveHRyaWNpdHkKU2l6emxpcGVkZQpDZW50aXNrb3JjaApDbG9iYm9wdXMKR3JhcHBsb2N0ClNpbmlzdGVhClBvbHRlYWdlaXN0CkhhdGVubmEKSGF0dHJlbQpIYXR0ZXJlbmUKSW1waWRpbXAKTW9yZ3JlbQpHcmltbXNuYXJsCk9ic3RhZ29vbgpQZXJyc2Vya2VyCkN1cnNvbGEKU2lyZmV0Y2gnZApNci4gUmltZQpSdW5lcmlndXMKTWlsY2VyeQpBbGNyZW1pZQpGYWxpbmtzClBpbmN1cmNoaW4KU25vbQpGcm9zbW90aApTdG9uam91cm5lcgpFaXNjdWUKSW5kZWVkZWUKTW9ycGVrbwpDdWZhbnQKQ29wcGVyYWphaApEcmFjb3pvbHQKQXJjdG96b2x0CkRyYWNvdmlzaApBcmN0b3Zpc2gKRHVyYWx1ZG9uCkRyZWVweQpEcmFrbG9hawpEcmFnYXB1bHQKWmFjaWFuClphbWF6ZW50YQpFdGVybmF0dXMKS3ViZnUKVXJzaGlmdQpaYXJ1ZGUKUmVnaWVsZWtpClJlZ2lkcmFnbwpHbGFzdHJpZXIKU3BlY3RyaWVyCkNhbHlyZXgKV3lyZGVlcgpLbGVhdm9yClVyc2FsdW5hCkJhc2N1bGVnaW9uClNuZWFzbGVyCk92ZXJxd2lsCkVuYW1vcnVzClNwcmlnYXRpdG8KRmxvcmFnYXRvCk1lb3dzY2FyYWRhCkZ1ZWNvY28KQ3JvY2Fsb3IKU2tlbGVkaXJnZQpRdWF4bHkKUXVheHdlbGwKUXVhcXVhdmFsCkxlY2hvbmsKT2lua29sb2duZQpUYXJvdW50dWxhClNwaWRvcHMKTnltYmxlCkxva2l4ClBhd21pClBhd21vClBhd21vdApUYW5kZW1hdXMKTWF1c2hvbGQKRmlkb3VnaApEYWNoc2J1bgpTbW9saXYKRG9sbGl2CkFyYm9saXZhClNxdWF3a2FiaWxseQpOYWNsaQpOYWNsc3RhY2sKR2FyZ2FuYWNsCkNoYXJjYWRldApBcm1hcm91Z2UKQ2VydWxlZGdlClRhZGJ1bGIKQmVsbGlib2x0CldhdHRyZWwKS2lsb3dhdHRyZWwKTWFzY2hpZmYKTWFib3NzdGlmZgpTaHJvb2RsZQpHcmFmYWlhaQpCcmFtYmxpbgpCcmFtYmxlZ2hhc3QKVG9lZHNjb29sClRvZWRzY3J1ZWwKS2xhd2YKQ2Fwc2FraWQKU2NvdmlsbGFpbgpSZWxsb3IKUmFic2NhCkZsaXR0bGUKRXNwYXRocmEKVGlua2F0aW5rClRpbmthdHVmZgpUaW5rYXRvbgpXaWdsZXR0Cld1Z3RyaW8KQm9tYmlyZGllcgpGaW5pemVuClBhbGFmaW4KVmFyb29tClJldmF2cm9vbQpDeWNsaXphcgpPcnRod29ybQpHbGltbWV0CkdsaW1tb3JhCkdyZWF2YXJkCkhvdW5kc3RvbmUKRmxhbWlnbwpDZXRvZGRsZQpDZXRpdGFuClZlbHV6YQpEb25kb3pvClRhdHN1Z2lyaQpBbm5paGlsYXBlCkNsb2RzaXJlCkZhcmlnaXJhZgpEdWR1bnNwYXJjZQpLaW5nYW1iaXQKR3JlYXQgVHVzawpTY3JlYW0gVGFpbApCcnV0ZSBCb25uZXQKRmx1dHRlciBNYW5lClNsaXRoZXIgV2luZwpTYW5keSBTaG9ja3MKSXJvbiBUcmVhZHMKSXJvbiBCdW5kbGUKSXJvbiBIYW5kcwpJcm9uIEp1Z3VsaXMKSXJvbiBNb3RoCklyb24gVGhvcm5zCkZyaWdpYmF4CkFyY3RpYmF4CkJheGNhbGlidXIKR2ltbWlnaG91bApHaG9sZGVuZ28KV28tQ2hpZW4KQ2hpZW4tUGFvClRpbmctTHUKQ2hpLVl1ClJvYXJpbmcgTW9vbgpJcm9uIFZhbGlhbnQKS29yYWlkb24KTWlyYWlkb24KV2Fsa2luZyBXYWtlCklyb24gTGVhdmVzCkRpcHBsaW4KUG9sdGNoYWdlaXN0ClNpbmlzdGNoYQpPa2lkb2dpCk11bmtpZG9yaQpGZXphbmRpcGl0aQpPZ2VycG9uCkFyY2hhbHVkb24KSHlkcmFwcGxlCkdvdWdpbmcgRmlyZQpSYWdpbmcgQm9sdApJcm9uIEJvdWxkZXIKSXJvbiBDcm93bgpUZXJhcGFnb3MKUGVjaGFydW50"), char => char.charCodeAt(0))
+  )
+    .split("\n")
+    .map(word => word.trim().toUpperCase())
+    .filter(Boolean);
+
+  const slots = document.getElementById("slots");
+  const missesList = document.getElementById("missesList");
+  const triesText = document.getElementById("triesText");
+  const message = document.getElementById("message");
+  const wordZone = document.getElementById("wordZone");
+  const letterInput = document.getElementById("letterInput");
+  const solveBtn = document.getElementById("solveBtn");
+  const newWordBtn = document.getElementById("newWordBtn");
+  const solveForm = document.getElementById("solveForm");
+  const solveInput = document.getElementById("solveInput");
+  const cancelSolve = document.getElementById("cancelSolve");
+  const submitSolve = document.getElementById("submitSolve");
+  const fullscreenBtn = document.getElementById("fullscreenBtn");
+  const gameCard = document.getElementById("gameCard");
+
+  let answer = "";
+  let guessed = new Set();
+  let misses = [];
+  let wrongCount = 0;
+  let active = false;
+  let solveMode = false;
+  let confirmNewWord = false;
+  let confirmTimer = null;
+
+
+  function vibrate(pattern){
+    if("vibrate" in navigator){
+      navigator.vibrate(pattern);
+    }
+  }
+
+  function flashWrong(){
+    gameCard.classList.remove("wrong-flash");
+    void gameCard.offsetWidth;
+    gameCard.classList.add("wrong-flash");
+    setTimeout(() => gameCard.classList.remove("wrong-flash"), 320);
+  }
+
+  function pulseCorrect(letter){
+    const hits = [...slots.querySelectorAll(`.letter-slot[data-letter="${letter}"]`)];
+    hits.forEach(el => {
+      el.classList.remove("correct-hit");
+      void el.offsetWidth;
+      el.classList.add("correct-hit");
+    });
+    setTimeout(() => hits.forEach(el => el.classList.remove("correct-hit")), 360);
+  }
+
+  function pickWord(){
+    let next = words[Math.floor(Math.random() * words.length)];
+    if(words.length > 1 && next === answer){
+      next = words[(words.indexOf(next) + 1) % words.length];
+    }
+    return next;
+  }
+
+  function startRound(){
+    answer = pickWord();
+    guessed = new Set();
+    misses = [];
+    wrongCount = 0;
+    triesText.classList.remove("warning");
+    active = true;
+    solveMode = false;
+    confirmNewWord = false;
+    slots.classList.remove("win","loss");
+    gameCard.classList.remove("wrong-flash");
+    letterInput.blur();
+    solveInput.blur();
+    document.body.classList.remove("keyboard-open","solve-mode-layout");
+    clearTimeout(confirmTimer);
+    newWordBtn.textContent = "New Word";
+    newWordBtn.className = "btn btn-primary";
+    solveForm.classList.remove("open");
+    solveBtn.style.display = "";
+    message.className = "message";
+    message.textContent = "";
+    render();
+  }
+
+  function normalizeChar(ch){
+    return (ch || "").toUpperCase().replace(/[^A-Z]/g,"").slice(0,1);
+  }
+
+  function uniqueLetters(str){
+    return [...new Set(str.replace(/[^A-Z]/g,""))];
+  }
+
+  function render(){
+    slots.innerHTML = "";
+    for(const ch of answer){
+      if(ch === " "){
+        const el = document.createElement("span");
+        el.className = "space-slot";
+        slots.appendChild(el);
+      } else if(/[A-Z]/.test(ch)){
+        const el = document.createElement("span");
+        el.className = "letter-slot";
+        el.dataset.letter = ch;
+        el.textContent = guessed.has(ch) ? ch : "";
+        slots.appendChild(el);
+      } else {
+        const el = document.createElement("span");
+        el.className = "punct";
+        el.textContent = ch;
+        slots.appendChild(el);
+      }
+    }
+
+    missesList.textContent = misses.length ? misses.join(" · ") : "";
+    triesText.textContent = `${wrongCount} / 6 misses`;
+    triesText.classList.toggle("warning", wrongCount >= 4);
+
+    for(let i=1;i<=6;i++){
+      document.getElementById("s"+i).classList.toggle("show", i <= wrongCount);
+    }
+  }
+
+  function isSolved(){
+    return uniqueLetters(answer).every(l => guessed.has(l));
+  }
+
+  function finishWin(){
+    uniqueLetters(answer).forEach(l => guessed.add(l));
+    active = false;
+    solveMode = false;
+    document.body.classList.remove("solve-mode-layout");
+    solveForm.classList.remove("open");
+    solveBtn.style.display = "none";
+    message.className = "message success";
+    message.textContent = "Correct.";
+    slots.classList.add("win");
+    vibrate([45, 35, 70]);
+    render();
+  }
+
+  function finishLoss(){
+    uniqueLetters(answer).forEach(l => guessed.add(l));
+    active = false;
+    solveMode = false;
+    document.body.classList.remove("solve-mode-layout");
+    solveForm.classList.remove("open");
+    solveBtn.style.display = "none";
+    message.className = "message danger";
+    message.textContent = `The answer was ${answer}.`;
+    slots.classList.add("loss");
+    vibrate([120, 60, 120]);
+    flashWrong();
+    render();
+  }
+
+  function wrongGuess(feedback){
+    wrongCount++;
+    vibrate(90);
+    flashWrong();
+    render();
+    if(wrongCount >= 6){
+      finishLoss();
+    } else {
+      message.className = "message";
+      message.textContent = feedback;
+    }
+  }
+
+  function handleLetter(raw){
+    if(!active || solveMode) return;
+    const letter = normalizeChar(raw);
+    if(!letter) return;
+
+    if(guessed.has(letter) || misses.includes(letter)){
+      message.className = "message";
+      message.textContent = `${letter} was already tried.`;
+      return;
+    }
+
+    if(answer.includes(letter)){
+      guessed.add(letter);
+      message.className = "message";
+      message.textContent = `${letter} is in the word.`;
+      render();
+      pulseCorrect(letter);
+      if(isSolved()) finishWin();
+    } else {
+      misses.push(letter);
+      wrongGuess(`${letter} is not in the word.`);
+    }
+  }
+
+  function focusLetterInput(){
+    if(active && !solveMode){
+      letterInput.value = "";
+      letterInput.focus({preventScroll:true});
+    }
+  }
+
+  letterInput.addEventListener("input", e => {
+    handleLetter(e.target.value);
+    e.target.value = "";
+  });
+
+  document.addEventListener("keydown", e => {
+    if(!active || solveMode) return;
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    if(/^[a-zA-Z]$/.test(e.key)){
+      e.preventDefault();
+      handleLetter(e.key);
+    }
+  });
+
+  wordZone.addEventListener("click", focusLetterInput);
+
+  solveBtn.addEventListener("click", () => {
+    if(!active) return;
+    solveMode = true;
+    document.body.classList.add("solve-mode-layout");
+    solveForm.classList.add("open");
+    solveBtn.style.display = "none";
+    message.className = "message";
+    message.textContent = "Enter the full word or phrase.";
+    solveInput.value = "";
+    setTimeout(() => {
+      solveInput.focus({preventScroll:true});
+      setTimeout(updateVisibleViewport, 120);
+    }, 60);
+  });
+
+  function closeSolve(){
+    solveMode = false;
+    document.body.classList.remove("solve-mode-layout");
+    solveForm.classList.remove("open");
+    solveBtn.style.display = "";
+    message.className = "message";
+    message.textContent = "";
+    setTimeout(focusLetterInput, 50);
+  }
+
+  cancelSolve.addEventListener("click", closeSolve);
+
+  function submitSolution(){
+    if(!active || !solveMode) return;
+    const attempt = solveInput.value.trim().replace(/\s+/g," ").toUpperCase();
+    if(!attempt) return;
+
+    if(attempt === answer){
+      finishWin();
+    } else {
+      solveInput.value = "";
+      closeSolve();
+      wrongGuess("Wrong solution. One miss added.");
+    }
+  }
+
+  submitSolve.addEventListener("click", submitSolution);
+  solveInput.addEventListener("keydown", e => {
+    if(e.key === "Enter"){
+      e.preventDefault();
+      submitSolution();
+    }
+  });
+
+  newWordBtn.addEventListener("click", () => {
+    if(!active){
+      startRound();
+      return;
+    }
+
+    if(!confirmNewWord){
+      confirmNewWord = true;
+      newWordBtn.textContent = "New Word?";
+      newWordBtn.className = "btn btn-danger";
+      message.className = "message";
+      message.textContent = "Tap again to abandon this round.";
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => {
+        confirmNewWord = false;
+        newWordBtn.textContent = "New Word";
+        newWordBtn.className = "btn btn-primary";
+      }, 2200);
+      return;
+    }
+
+    startRound();
+  });
+
+
+  async function toggleFullscreen(){
+    try{
+      if(!document.fullscreenElement){
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch(e){
+      // Fullscreen availability varies by browser/device.
+    }
+  }
+
+
+
+  function updateVisibleViewport(){
+    const vv = window.visualViewport;
+    if(!vv) return;
+
+    const fullHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
+    const ratio = Math.min(1, vv.height / fullHeight);
+
+    /* Keep sizing relative: express the visible height as svh, not pixels. */
+    const visibleSvh = Math.max(42, ratio * 100);
+    document.documentElement.style.setProperty("--app-height", `${visibleSvh}svh`);
+
+    const keyboardLikelyOpen = ratio < 0.82;
+    document.body.classList.toggle("keyboard-open", keyboardLikelyOpen);
+  }
+
+  if(window.visualViewport){
+    window.visualViewport.addEventListener("resize", updateVisibleViewport);
+    window.visualViewport.addEventListener("scroll", updateVisibleViewport);
+  }
+
+  window.addEventListener("resize", updateVisibleViewport);
+
+  letterInput.addEventListener("focus", () => setTimeout(updateVisibleViewport, 60));
+  letterInput.addEventListener("blur", () => setTimeout(updateVisibleViewport, 90));
+
+  fullscreenBtn.addEventListener("click", toggleFullscreen);
+
+  document.addEventListener("fullscreenchange", () => {
+    const activeFullscreen = Boolean(document.fullscreenElement);
+    fullscreenBtn.textContent = activeFullscreen ? "×" : "⛶";
+    fullscreenBtn.setAttribute("aria-label", activeFullscreen ? "Exit fullscreen" : "Enter fullscreen");
+    fullscreenBtn.title = activeFullscreen ? "Exit fullscreen" : "Fullscreen";
+  });
+
+  updateVisibleViewport();
+  startRound();
+})();
+</script>
+</body>
+</html>
