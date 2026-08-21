@@ -1416,6 +1416,14 @@
 .topics-btn{border:0;border-radius:.75rem;background:#f2f4f7;color:var(--text);min-height:2.35rem;padding:0 .8rem;font-weight:700}.topics-btn span{margin-left:.3rem;color:var(--accent)}.topics-overlay{position:fixed;inset:0;z-index:100;display:none;align-items:flex-end;justify-content:center;background:rgba(20,24,30,.38)}.topics-overlay.open{display:flex}.topics-sheet{width:min(100%,46rem);max-height:88svh;display:flex;flex-direction:column;background:var(--surface);border-radius:1.25rem 1.25rem 0 0;padding:1rem;padding-bottom:max(env(safe-area-inset-bottom),1rem)}.topics-sheet-head{display:flex;justify-content:space-between;align-items:center}.topics-title{font-size:1.15rem;font-weight:800}.topics-subtitle{color:var(--muted);font-size:.88rem}.topics-close{border:0;background:#f2f4f7;width:2.4rem;aspect-ratio:1;border-radius:.75rem;font-size:1.4rem}.topics-actions-row{display:flex;gap:.5rem;margin-top:.8rem}.topics-mini-btn{border:.0625rem solid var(--line);border-radius:.7rem;background:white;padding:.5rem .7rem;font-weight:700}.topics-grid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;margin-top:.8rem}.topic-chip{display:flex;align-items:center;min-height:3rem;border:.0625rem solid var(--line);border-radius:.8rem;padding:.7rem .8rem;background:white;font-weight:650}.topic-chip.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}.topic-chip.selected::after{content:"✓";margin-left:auto}.topics-footer{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.85rem}.topics-footer .btn{width:100%}@media(min-width:40em){.topics-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.topics-sheet{border-radius:1.25rem;margin:auto}.topics-overlay{align-items:center;padding:1rem}}.topics-btn{display:flex!important;position:absolute;left:50%;transform:translateX(-50%);align-items:center;gap:.45rem}
 .topics-overlay.open{display:flex!important}
 .topic-chip.random-topic{grid-column:1/-1;justify-content:center;font-weight:800}
+
+  /* Solve mode: previously guessed letters stay visually marked,
+     but all A-Z keys become usable for typing the full answer. */
+  .custom-keyboard.solve-mode .letter-key.used{
+    pointer-events:auto;
+    opacity:1;
+  }
+
 </style>
 </head>
 <body>
@@ -1631,6 +1639,10 @@
   let active=false, solveMode=false, solveBuffer="", confirmNewWord=false, confirmTimer=null;
   let selectedTopics=new Set(),draftTopics=new Set(), randomMode=true, draftRandomMode=true;
 
+  let backspaceHoldTimer=null;
+  let backspaceRepeatTimer=null;
+  let backspaceHoldActive=false;
+  let backspaceConsumedClick=false;
   const KEY_HAPTIC_MS = 6;
   const ENTER_HAPTIC_MS = 8;
   const KEY_POPUP_MS = 105;
@@ -1820,6 +1832,7 @@
   }
 
   function leaveSolve(){
+    stopBackspaceHold();
     solveMode=false;
     solveBuffer="";
     keyboard.classList.remove("solve-mode");
@@ -1834,6 +1847,54 @@
     if(!attempt) return;
     if(attempt===answer) finishWin(); else { leaveSolve(); wrongGuess("Wrong solution. One miss added."); }
   }
+
+
+  function deleteOneSolveChar(){
+    if(!solveMode || !solveBuffer) return;
+    solveBuffer=solveBuffer.slice(0,-1);
+    updateSolve();
+  }
+
+  function stopBackspaceHold(){
+    clearTimeout(backspaceHoldTimer);
+    clearInterval(backspaceRepeatTimer);
+    backspaceHoldTimer=null;
+    backspaceRepeatTimer=null;
+    backspaceHoldActive=false;
+  }
+
+  const backspaceKey=keyboard.querySelector('[data-key="BACKSPACE"]');
+
+  backspaceKey?.addEventListener("pointerdown",e=>{
+    if(!active || !solveMode) return;
+
+    e.preventDefault();
+    backspaceConsumedClick=false;
+    backspaceHoldActive=true;
+
+    /* Smartphone-like behavior: one immediate deletion, then repeat after a pause. */
+    vibrate(KEY_HAPTIC_MS);
+    deleteOneSolveChar();
+
+    backspaceHoldTimer=setTimeout(()=>{
+      if(!backspaceHoldActive) return;
+      backspaceConsumedClick=true;
+
+      backspaceRepeatTimer=setInterval(()=>{
+        if(!backspaceHoldActive || !solveMode || !solveBuffer){
+          stopBackspaceHold();
+          return;
+        }
+        deleteOneSolveChar();
+      },70);
+    },360);
+  });
+
+  ["pointerup","pointercancel","pointerleave"].forEach(type=>{
+    backspaceKey?.addEventListener(type,()=>{
+      stopBackspaceHold();
+    });
+  });
 
   keyboard.addEventListener("click",e=>{
     const key=e.target.closest(".kb-key");
@@ -1859,7 +1920,15 @@
 
     if(/^[A-Z]$/.test(v)) solveBuffer+=v;
     else if(v==="SPACE" && solveBuffer && !solveBuffer.endsWith(" ")) solveBuffer+=" ";
-    else if(v==="BACKSPACE") solveBuffer=solveBuffer.slice(0,-1);
+    else if(v==="BACKSPACE"){
+      if(backspaceConsumedClick){
+        backspaceConsumedClick=false;
+        return;
+      }
+      /* Fallback for browsers that dispatch click without pointerdown. */
+      deleteOneSolveChar();
+      return;
+    }
     else if(v==="ENTER"){
       submitSolve();
       return;
